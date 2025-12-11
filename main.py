@@ -22,27 +22,25 @@ LAST_PRICE_FILE = pathlib.Path("last_notified_price.txt")
 
 def get_current_price() -> float:
     """
-    Fetch the apartment page and extract the price as a number.
-    You may need to tweak the parsing logic depending on the site.
+    Fetch price from:
+    <span data-jd-fp-adp="display" class="jd-fp-strong-text">Base Rent $2,671</span>
     """
     resp = requests.get(APARTMENT_URL, timeout=15)
     resp.raise_for_status()
 
-    html = resp.text
-    soup = BeautifulSoup(html, "html.parser")
+    soup = BeautifulSoup(resp.text, "html.parser")
 
-    # --- OPTION 1: Try a specific CSS selector if you know it ---
-    # Example (you'd update this to match the site):
-    # price_element = soup.select_one("span.rent-amount")
-    # if price_element and price_element.text:
-    #     text = price_element.text
+    span = soup.select_one('span[data-jd-fp-adp="display"].jd-fp-strong-text')
+    if not span or not span.get_text(strip=True):
+        raise ValueError(
+            "Price element not found: span[data-jd-fp-adp=\"display\"].jd-fp-strong-text"
+        )
 
-    # --- OPTION 2: Generic regex search through all text for $X,XXX ---
-    text = soup.get_text(" ", strip=True)
+    text = span.get_text(strip=True)  # e.g. "Base Rent $2,671"
+
     match = re.search(r"\$\s*([0-9]{1,3}(?:,[0-9]{3})*)", text)
     if not match:
-        raise ValueError("Could not find a price like $1,234 on the page. "
-                         "You may need to adjust the parsing logic.")
+        raise ValueError(f"Could not parse price from: {text!r}")
 
     price_str = match.group(1).replace(",", "")
     return float(price_str)
